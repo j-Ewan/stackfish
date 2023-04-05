@@ -78,6 +78,8 @@ struct active_piece {
     int type;
 };
 
+// an array and an index shift; the shift avoids extensive memory setting;
+// use queue[ (i + index_shift) % Q_LENGTH ] to get items
 struct piece_queue {
     int pieces[Q_LENGTH];
     int index_shift; // optimization

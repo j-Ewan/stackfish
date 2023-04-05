@@ -7,6 +7,8 @@
 
 
 int LAST_CALCED_MINOS[12]; // stores latest calculation in memory as an optimization
+
+// gets an array of 4 2-tuples of the individual minos of the given piece
 int * get_minos(struct active_piece piece) {
     if (piece.x == LAST_CALCED_MINOS[0]
      && piece.y == LAST_CALCED_MINOS[1]
@@ -113,7 +115,7 @@ void display_game(struct tetris_game * game) {
 
 
     // check toptwo rows (only active piece) 
-    for (int y = BOARD_H + 1; y >= BOARD_H; y--) {
+    for (int y = BOARD_H + 2; y >= BOARD_H; y--) {
         for (int x = 0; x < BOARD_W; x++)
         {
             int current_piece = 0;
@@ -156,7 +158,7 @@ int check_collision(struct active_piece piece, int board[BOARD_W*BOARD_H]) {
     minos = get_minos(piece);
 
     for (int i = 0; i < 8; i+=2) {
-        if (minos[i] < 0 || minos[i] >= BOARD_W || minos[i + 1] < 0 || minos[i + 1] >= BOARD_H + 2) return 1;
+        if (minos[i] < 0 || minos[i] >= BOARD_W || minos[i + 1] < 0 || minos[i + 1] >= BOARD_H + 3) return 1;
         if (minos[i + 1] >= BOARD_H) continue;
         if (board[ minos[i] + BOARD_W * (minos[i + 1]) ] != 0) return 1;
     }
@@ -338,21 +340,21 @@ void try_place_piece(struct tetris_game * game) {
     clear_filled_lines(game->board);
 }
 
-void try_move_piece(struct tetris_game * game, int movement[2]) {
+void try_translate_piece(struct active_piece * piece, int * board, int movement[2]) {
     struct active_piece test_piece = {
-        game->piece.x + movement[0],
-        game->piece.y + movement[1],
-        game->piece.r,
-        game->piece.type
+        piece->x + movement[0],
+        piece->y + movement[1],
+        piece->r,
+        piece->type
     };
 
-    if (check_collision(test_piece, game->board) == 1) {
+    if (check_collision(test_piece, board) == 1) {
         return;
     }
 
-    game->piece.x = test_piece.x;
-    game->piece.y = test_piece.y;
-    game->piece.r = test_piece.r;
+    piece->x = test_piece.x;
+    piece->y = test_piece.y;
+    piece->r = test_piece.r;
 
     return;
 }
@@ -378,7 +380,7 @@ void init_game(struct tetris_game * game) {
     
     memset(game, 0, sizeof(*game)); // clear all data
     
-    // initilaize bag, didn't feel like putting this in a loop
+    // initilaize queue
     try_append_bag(&game->queue);
     try_append_bag(&game->queue);
     try_append_bag(&game->queue);

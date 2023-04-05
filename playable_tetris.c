@@ -51,7 +51,7 @@ int main() {
                 break;
 
         }
-        try_move_piece(&game, movement);
+        try_translate_piece(&game.piece, game.board, movement);
     }
     return 0;
 }
