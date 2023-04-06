@@ -49,6 +49,13 @@ int main() {
             case 't': // for tests
                 
                 break;
+            case 'b':
+                printf("{");
+                for (int i = 0; i < 39; i++) {
+                    printf("%d, ", game.board[i]);
+                }
+                printf("%d}\n", game.board[39]);
+                break;
 
         }
         try_translate_piece(&game.piece, game.board, movement);

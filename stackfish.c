@@ -108,19 +108,21 @@ int * get_possible_placements(int piece_type, int board[BOARD_H*BOARD_W]) {
         }}}
 
 
+
+
+        // printf("checking next: %d\n", check_next_count);
+    }
+
         for (int r = 0; r < 4; r++) {
-            printf("r=%d\n",r);
-            for (int y = 4; y >= 0; y--) {
-                printf("y=%d: ",y);
-                for (int x = 0; x < 10; x++) {
-                    printf("%d  ", when_to_check[x*20 + y*4 + r]);
-                }
-                printf("\n");
+        printf("r=%d\n",r);
+        for (int y = 4; y >= 0; y--) {
+            printf("y=%d: ",y);
+            for (int x = 0; x < 10; x++) {
+                printf("%d  ", when_to_check[x*20 + y*4 + r]);
             }
             printf("\n");
         }
-
-        // printf("checking next: %d\n", check_next_count);
+        printf("\n");
     }
 
     free(when_to_check);

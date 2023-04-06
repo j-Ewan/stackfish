@@ -7,13 +7,11 @@ int main() {
     struct tetris_game game_thing = {0};
     init_game(&game_thing);
     // game_thing.piece.type = O_PIECE;
-    int legs[BOARD_H*BOARD_W] = {L_PIECE, L_PIECE, L_PIECE, 0, 0, 0, 0, 0, 0, 0,
-                        L_PIECE, Z_PIECE, Z_PIECE, 0, 0, 0, 0, 0, 0, 0,
-                        O_PIECE, O_PIECE, Z_PIECE, Z_PIECE, 0, 0, 0, 0, 0, 0,
-                        O_PIECE, O_PIECE, I_PIECE, I_PIECE, I_PIECE, I_PIECE, 0, 0, 0, 0};
+    int test_board[BOARD_H*BOARD_W] = {5, 5, 0, 2, 2, 2, 2, 0, 0, 6, 5, 5, 1, 1, 1, 0, 0, 0, 6, 6, 0, 0, 0, 1, 0, 0, 0, 0, 6, 4, 0, 0, 0, 0, 0, 0, 0, 4, 4, 4};
     for (int i = 0; i<40;i++) {
-        game_thing.board[i] = legs[39-i];
+        game_thing.board[i] = test_board[i];
     }
+    game_thing.piece.type = L_PIECE;
 
     display_game(&game_thing);
     
