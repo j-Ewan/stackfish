@@ -158,12 +158,22 @@ int check_collision(struct active_piece piece, int board[BOARD_W*BOARD_H]) {
     minos = get_minos(piece);
 
     for (int i = 0; i < 8; i+=2) {
-        if (minos[i] < 0 || minos[i] >= BOARD_W || minos[i + 1] < 0 || minos[i + 1] >= BOARD_H + 3) return 1;
+        if (minos[i] < 0 || minos[i] >= BOARD_W || minos[i + 1] < 0) return 1;
         if (minos[i + 1] >= BOARD_H) continue;
         if (board[ minos[i] + BOARD_W * (minos[i + 1]) ] != 0) return 1;
     }
 
     return 0; 
+}
+
+int in_bounds(struct active_piece piece, int board[BOARD_W*BOARD_H]) {    
+    int * minos;
+    minos = get_minos(piece);
+    for (int i = 0; i < 8; i+=2) {
+        if (minos[i] < 0 || minos[i] >= BOARD_W || minos[i + 1] < 0 || minos[i+1] >= BOARD_H) return 0;
+    }
+
+    return 1; 
 }
 
 int rotate_srs(struct active_piece * piece, int rotation, int board[BOARD_W*BOARD_H]) {
@@ -309,18 +319,18 @@ int clear_filled_lines(int *board) {
     }
 }
 
-int piece_on_ground(struct active_piece piece, int board[BOARD_H*BOARD_W]){
+int can_place_piece(struct active_piece piece, int board[BOARD_H*BOARD_W]){
     struct active_piece down_piece = {
         piece.x,
         piece.y - 1,
         piece.r,
         piece.type
     };
-    return check_collision(down_piece, board);
+    return check_collision(down_piece, board) && !check_collision(piece, board) && in_bounds(piece, board);
 }
 
 void try_place_piece(struct tetris_game * game) {
-    if (!piece_on_ground(game->piece, game->board)) {return;}
+    if (!can_place_piece(game->piece, game->board)) {return;}
     int * minos;
     minos = get_minos(game->piece);
 
