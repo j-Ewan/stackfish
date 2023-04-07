@@ -4,7 +4,6 @@
 int * get_possible_placements(int piece_type, int board[BOARD_H*BOARD_W]) {
     int * placements = (int*) malloc(3*64 * sizeof(int));
     memset(placements, -1, 3*36 * sizeof(int));
-    // int placements[3 * 36] = { 0 }; // 3-tuples of x, y, rot; 36 is likely the max amount of placements possible
     int placements_count = 0;
 
     // an array where the position and rotation of the piece is encoded in the place of the array, and the value at the position represents which loop to check it on (0 means unchecked)
@@ -25,22 +24,6 @@ int * get_possible_placements(int piece_type, int board[BOARD_H*BOARD_W]) {
             check_next_count++;
         }
     }
-    // when_to_check[4*20+4*4+0] = 1;
-    // check_next_count++;
-
-    // for (int r = 0; r < 4; r++) {
-    //     printf("r=%d\n",r);
-    //     for (int y = 4; y >= 0; y--) {
-    //         printf("y=%d: ",y);
-    //         for (int x = 0; x < 10; x++) {
-    //             printf("%d  ", when_to_check[x*20 + y*4 + r]);
-    //         }
-    //         printf("\n");
-    //     }
-    //     printf("\n");
-    // } 
-
-    // printf("|||||||||||\n\n");
 
     // main loop
     for (int loop_num = 1; check_next_count != 0; loop_num++) {
@@ -52,7 +35,6 @@ int * get_possible_placements(int piece_type, int board[BOARD_H*BOARD_W]) {
         for (int r = 0; r < 4; r++) {
             // need to check?
             if (when_to_check[x*20 + y*4 + r] != loop_num) continue;
-            // printf("checking pos %d, %d, %d\n", x, y, r);
             test_piece.x = x;
             test_piece.y = y;
             test_piece.r = r;
@@ -63,7 +45,6 @@ int * get_possible_placements(int piece_type, int board[BOARD_H*BOARD_W]) {
                 placements[placements_count*3 + 1] = y;
                 placements[placements_count*3 + 2] = r;
                 placements_count++;
-                // printf("discovered placement #%d: %d, %d, %d\n", placements_count, x, y, r);
             }
 
             // translations
@@ -106,27 +87,32 @@ int * get_possible_placements(int piece_type, int board[BOARD_H*BOARD_W]) {
                 }
             }
         }}}
-
-
-
-
-        // printf("checking next: %d\n", check_next_count);
-    }
-
-        // for (int r = 0; r < 4; r++) {
-        // printf("r=%d\n",r);
-        // for (int y = 4; y >= 0; y--) {
-        //     printf("y=%d: ",y);
-        //     for (int x = 0; x < 10; x++) {
-        //         printf("%d  ", when_to_check[x*20 + y*4 + r]);
-        //     }
-        //     printf("\n");
-        // }
-        // printf("\n");
     }
 
     free(when_to_check);
 
     // printf("Placements count: %d\n", placements_count);
     return placements;
+}
+
+int roughly_evaluate_board(int board[BOARD_H * BOARD_W]) {
+    // check for holes
+    int empty_mino_count = 0;
+    for (int row = 0; row < BOARD_W-1; row++) {
+        for (int y = 0; y < 4; y++) empty_mino_count += board[row + y*10] == 0;
+        if (!((board[row + 0*10] == 0 && board[row+1 + 0*10] == 0)
+           || (board[row + 1*10] == 0 && board[row+1 + 1*10] == 0)
+           || (board[row + 2*10] == 0 && board[row+1 + 2*10] == 0)
+           || (board[row + 3*10] == 0 && board[row+1 + 3*10] == 0))) {
+            if (empty_mino_count % 4 != 0) return 0;
+            empty_mino_count = 0;
+        }
+    }
+    return 1;
+}
+
+int evaluate_game(struct tetris_game game, int depth) {
+    if (depth == 0) {
+        return roughly_evaluate_board(game.board);
+    }
 }
