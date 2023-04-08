@@ -44,6 +44,8 @@ int main() {
                 init_game(&game);
                 break;
             case 'e':
+                if (game.cant_hold) break;
+                game.cant_hold = 1;
                 swap_hold(&game);
                 break;
             case 't': // for tests

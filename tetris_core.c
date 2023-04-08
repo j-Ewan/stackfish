@@ -370,9 +370,6 @@ void try_translate_piece(struct active_piece * piece, int * board, int movement[
 }
 
 void swap_hold(struct tetris_game * game) {
-    if (game->cant_hold) return;
-
-    game->cant_hold = 1;
     reset_piece_pos(&game->piece);
 
     if (game->hold_piece == 0) {

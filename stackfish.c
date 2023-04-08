@@ -1,8 +1,13 @@
 #include "tetris_core.c"
 
+// constants for board evaluation, mostly arbitrary for now
+#define PERFECT_CLEAR_BONUS 1000000
+const int BOARD_HEAT_MAP[BOARD_H*BOARD_W] =         {6, 6, 5, 5, 4, 4, 4, 4, 5, 6,  6, 6, 5, 4, 4, 3, 1, 2, 5, 6,  6, 5, 5, 3, 3, 2, 1, 0, 2, 5,  6, 5, 4, 4, 3, 2, 0, 0, 1, 5};
+const int BOARD_HEAT_MAP_REVERSE[BOARD_H*BOARD_W] = {6, 5, 4, 4, 4, 4, 5, 5, 6, 6,  6, 5, 2, 1, 3, 4, 4, 5, 6, 6,  5, 2, 0, 1, 2, 3, 3, 5, 5, 6,  5, 1, 0, 0, 2, 3, 4, 4, 5, 6};
+
 // gets a list of all possible piece placements given a piece and board. return array in the form of 36 3-tuples, (x, y, r)
 int * get_possible_placements(int piece_type, int board[BOARD_H*BOARD_W]) {
-    int * placements = (int*) malloc(3*64 * sizeof(int));
+    int * placements = (int*) malloc(3*36 * sizeof(int));
     memset(placements, -1, 3*36 * sizeof(int));
     int placements_count = 0;
 
@@ -96,23 +101,79 @@ int * get_possible_placements(int piece_type, int board[BOARD_H*BOARD_W]) {
 }
 
 int roughly_evaluate_board(int board[BOARD_H * BOARD_W]) {
+    int score = 0;
+
     // check for holes
     int empty_mino_count = 0;
     for (int row = 0; row < BOARD_W-1; row++) {
         for (int y = 0; y < 4; y++) empty_mino_count += board[row + y*10] == 0;
-        if (!((board[row + 0*10] == 0 && board[row+1 + 0*10] == 0)
-           || (board[row + 1*10] == 0 && board[row+1 + 1*10] == 0)
-           || (board[row + 2*10] == 0 && board[row+1 + 2*10] == 0)
-           || (board[row + 3*10] == 0 && board[row+1 + 3*10] == 0))) {
+        if (!((board[row + 0*BOARD_W] == 0 && board[row+1 + 0*BOARD_W] == 0)
+           || (board[row + 1*BOARD_W] == 0 && board[row+1 + 1*BOARD_W] == 0)
+           || (board[row + 2*BOARD_W] == 0 && board[row+1 + 2*BOARD_W] == 0)
+           || (board[row + 3*BOARD_W] == 0 && board[row+1 + 3*BOARD_W] == 0))) {
             if (empty_mino_count % 4 != 0) return 0;
             empty_mino_count = 0;
         }
     }
-    return 1;
+
+    // check for perfect clear
+    int count = 0;
+    for (int i = 0; i < BOARD_H*BOARD_W; i++) {
+        count += board[i];
+    }
+    if (count == 0) {
+        score += PERFECT_CLEAR_BONUS;
+    }
+
+    // heat map (weight better boards)
+    int map_score_left = 0;
+    int map_score_right = 0;
+    for (int i = 0; i < BOARD_H*BOARD_W; i++) {
+        map_score_left += (board[i] != 0) * BOARD_HEAT_MAP[i];
+        map_score_right += (board[i] != 0) * BOARD_HEAT_MAP_REVERSE[i];
+    }
+    int use_left = map_score_left > map_score_right;
+    score += use_left * map_score_left
+          + !use_left * map_score_right;
+    
+
+    return score;
 }
 
 int evaluate_game(struct tetris_game game, int depth) {
+    int rough_evaluation = roughly_evaluate_board(game.board);
     if (depth == 0) {
-        return roughly_evaluate_board(game.board);
+        return rough_evaluation;
     }
+    if (rough_evaluation == 0) return 0;
+
+    struct tetris_game test_game;
+    int * possible_placements = get_possible_placements(game.piece.type, game.board);
+
+    int max_score = 0;
+    for (int i = 0; possible_placements[i] != -1 && i < 3*36; i+=3) {
+        test_game = game;
+        test_game.piece.x = possible_placements[i];
+        test_game.piece.y = possible_placements[i+1];
+        test_game.piece.r = possible_placements[i+2];
+
+        try_place_piece(&test_game);
+
+        int evaluation = evaluate_game(test_game, depth - 1);
+
+        if (evaluation > max_score) {
+            max_score = evaluation;
+        }
+
+        swap_hold(&test_game);
+
+        int hold_evaluation = evaluate_game(test_game, depth - 1);
+
+        if (hold_evaluation > max_score) {
+            max_score = hold_evaluation;
+        }
+
+        // display_game(&test_game);
+    }
+    return max_score;
 }
