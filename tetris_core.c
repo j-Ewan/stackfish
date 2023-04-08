@@ -77,7 +77,7 @@ void add_color(int piece) {
             printf("\033[0;36m");
             break;
         case L_PIECE:
-            printf("\033[0;33m");
+            printf("\033[38;2;255;165;0m");
             break;
         case J_PIECE:
             printf("\033[0;34m");
