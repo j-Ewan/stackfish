@@ -131,6 +131,41 @@ int roughly_evaluate_board(int board[BOARD_H * BOARD_W]) {
     return score;
 }
 
+struct uint64_int_dynamic_map {
+    int length;
+    int used;
+    unsigned long * uint64s;
+    int * ints;
+};
+
+void init_uint64_int_dynamic_map(struct uint64_int_dynamic_map * map, int length) {
+    map->length = length;
+    map->uint64s = (unsigned long*) malloc(length * sizeof(unsigned long));
+    map->ints = (int*) malloc(length * sizeof(int));
+}
+
+void del_uint64_int_dynamic_map(struct uint64_int_dynamic_map * map) {
+    free(map->uint64s);
+    free(map->ints);
+}
+
+void expand_uint64_int_dynamic_map(struct uint64_int_dynamic_map * map, double growth_factor) {
+    int old_size = map->length;
+    int new_length = map->length * growth_factor;
+    unsigned long * new_mem_block_uint64s = (unsigned long*) realloc(map->uint64s, new_length);
+    int * new_mem_block_ints = (int*) realloc(map->ints, new_length);
+
+    if (new_mem_block_uint64s != NULL) {
+        map->uint64s = new_mem_block_uint64s;
+        memcpy(map->uint64s + old_size, 0, sizeof(unsigned long) * (map->length - old_size));
+    } else printf("ERROR: failed to realloc uint64_int_dynamic_map.uint64s");
+    if (new_mem_block_ints != NULL) {
+        map->ints = new_mem_block_ints;
+        memcpy(map->ints + old_size, 0, sizeof(int) * (map->length - old_size));
+    } else printf("ERROR: failed to realloc uint64_int_dynamic_map.ints");
+}
+
+
 int evaluate_game(struct tetris_game game, int depth) {
     // check for perfect clear
     int mino_count = 0;
@@ -175,7 +210,6 @@ int evaluate_game(struct tetris_game game, int depth) {
 }
 
 struct active_piece get_optimal_move(struct tetris_game game, int depth) {
-
     struct tetris_game test_game = {0};
 
     int * possible_placements = get_possible_placements(game.piece.type, game.board);
