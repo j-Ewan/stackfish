@@ -17,7 +17,7 @@ int main() {
     for (int ai_turn = 0; ai_turn < 20; ai_turn++) {
         display_game(&game_thing);
 
-        struct active_piece ai_choice = get_optimal_move(game_thing, 4);
+        struct active_piece ai_choice = get_optimal_move(game_thing, 2);
 
         if (ai_choice.type != game_thing.piece.type) swap_hold(&game_thing);
 
