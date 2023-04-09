@@ -2,8 +2,8 @@
 
 // constants for board evaluation, mostly arbitrary for now
 #define PERFECT_CLEAR_BONUS 1000000
-const int BOARD_HEAT_MAP[BOARD_H*BOARD_W] =         {-4, -4, -5, -5, -6, -6, -6, -6, -5, -4,  -4, -4, -5, -6, -6, -7, -9, -8, -5, -4,  -4, -5, -5, -7, -7, -8, -9, -10, -8, -5,  -4, -5, -6, -6, -7, -8, -10, -10, -9, -5};
-const int BOARD_HEAT_MAP_REVERSE[BOARD_H*BOARD_W] = {-4, -5, -6, -6, -6, -6, -5, -5, -4, -4,  -4, -5, -8, -9, -7, -6, -6, -5, -4, -4,  -5, -8, -10, -9, -8, -7, -7, -5, -5, -4,  -5, -9, -10, -10, -8, -7, -6, -6, -5, -4};
+const int BOARD_HEAT_MAP[BOARD_H*BOARD_W] =         {5, 5, 4, 4, 3, 3, 3, 3, 4, 5, 5, 5, 4, 3, 3, 2, 0, 1, 4, 5, 5, 4, 4, 2, 2, 1, 0, -1, 1, 4, 5, 4, 3, 3, 2, 1, -1, -1, 0, 4};
+const int BOARD_HEAT_MAP_REVERSE[BOARD_H*BOARD_W] = {5, 4, 3, 3, 3, 3, 4, 4, 5, 5, 5, 4, 1, 0, 2, 3, 3, 4, 5, 5, 4, 1, -1, 0, 1, 2, 2, 4, 4, 5, 4, 0, -1, -1, 1, 2, 3, 3, 4, 5};
 
 // gets a list of all possible piece placements given a piece and board. return array in the form of 36 3-tuples, (x, y, r)
 int * get_possible_placements(int piece_type, int board[BOARD_H*BOARD_W]) {
@@ -140,6 +140,7 @@ struct uint64_int_dynamic_map {
 
 void init_uint64_int_dynamic_map(struct uint64_int_dynamic_map * map, int length) {
     map->length = length;
+    map->used = 0;
     map->uint64s = (unsigned long*) malloc(length * sizeof(unsigned long));
     map->ints = (int*) malloc(length * sizeof(int));
 }
@@ -151,22 +152,57 @@ void del_uint64_int_dynamic_map(struct uint64_int_dynamic_map * map) {
 
 void expand_uint64_int_dynamic_map(struct uint64_int_dynamic_map * map, double growth_factor) {
     int old_size = map->length;
-    int new_length = map->length * growth_factor;
-    unsigned long * new_mem_block_uint64s = (unsigned long*) realloc(map->uint64s, new_length);
-    int * new_mem_block_ints = (int*) realloc(map->ints, new_length);
+    map->length *= growth_factor;
+    unsigned long * new_mem_block_uint64s = (unsigned long*) realloc(map->uint64s, sizeof(unsigned long) * map->length);
+    int * new_mem_block_ints = (int*) realloc(map->ints, sizeof(int) * map->length);
 
     if (new_mem_block_uint64s != NULL) {
         map->uint64s = new_mem_block_uint64s;
-        memcpy(map->uint64s + old_size, 0, sizeof(unsigned long) * (map->length - old_size));
+        memset(map->uint64s + old_size, 0, sizeof(unsigned long) * (map->length - old_size));
     } else printf("ERROR: failed to realloc uint64_int_dynamic_map.uint64s");
     if (new_mem_block_ints != NULL) {
         map->ints = new_mem_block_ints;
-        memcpy(map->ints + old_size, 0, sizeof(int) * (map->length - old_size));
+        memset(map->ints + old_size, 0, sizeof(int) * (map->length - old_size));
     } else printf("ERROR: failed to realloc uint64_int_dynamic_map.ints");
 }
 
+int get_uint64_int_dynamic_map(struct uint64_int_dynamic_map * map, unsigned long uint64) {
+    for (int i = 0; i < map->used; i++) {
+        if (map->uint64s[i] == uint64) return map->ints[i];
+    }
+    return -1;
+}
 
-int evaluate_game(struct tetris_game game, int depth) {
+void add_uint64_int_dynamic_map(struct uint64_int_dynamic_map * map, unsigned long uint64, int val) {
+    if (map->length == map->used) {
+        expand_uint64_int_dynamic_map(map, 1.25);
+    }
+    map->uint64s[map->used] = uint64;
+    map->ints[map->used] = val;
+    map->used++;
+}
+
+// encodes critical info of a game into a uint64
+// 3 buffer bits, 40 bits for the board, 3 for hold piece, 3 for active, 15 for each piece in queue
+unsigned long encode_game(struct tetris_game game) {
+    unsigned long uint64 = 0;
+    for (int i = 0; i < 40; i++) {
+        uint64 <<= 1;
+        uint64 |= game.board[i] != 0;
+    }
+    uint64 <<= 3;
+    uint64 |= game.hold_piece;
+    uint64 <<= 3;
+    uint64 |= game.piece.type;
+    for (int i = 0; i < 5; i++) {
+        uint64 <<= 3;
+        uint64 |= game.queue.pieces[i + game.queue.index_shift];
+    }
+
+    return uint64;
+}
+
+int evaluate_game(struct tetris_game game, int depth, struct uint64_int_dynamic_map * already_evaluated) {
     // check for perfect clear
     int mino_count = 0;
     for (int i = 0; i < BOARD_H*BOARD_W; i++) {
@@ -178,6 +214,12 @@ int evaluate_game(struct tetris_game game, int depth) {
         return rough_evaluation + (mino_count == 0) * PERFECT_CLEAR_BONUS;
     }
     if (rough_evaluation == 0) return 0;
+
+    unsigned long encoded_game = encode_game(game);
+    int check_already_evaluated = get_uint64_int_dynamic_map(already_evaluated, encoded_game);
+    if (check_already_evaluated != -1) {
+        return check_already_evaluated;
+    }
 
     struct tetris_game test_game;
     int * possible_placements = get_possible_placements(game.piece.type, game.board);
@@ -191,7 +233,7 @@ int evaluate_game(struct tetris_game game, int depth) {
 
         try_place_piece(&test_game);
 
-        int evaluation = evaluate_game(test_game, depth - 1);
+        int evaluation = evaluate_game(test_game, depth - 1, already_evaluated);
 
         if (evaluation > max_score) {
             max_score = evaluation;
@@ -199,17 +241,23 @@ int evaluate_game(struct tetris_game game, int depth) {
 
         swap_hold(&test_game);
 
-        int hold_evaluation = evaluate_game(test_game, depth - 1);
+        int hold_evaluation = evaluate_game(test_game, depth - 1, already_evaluated);
 
         if (hold_evaluation > max_score) {
             max_score = hold_evaluation;
         }
 
     }
-    return max_score + (mino_count == 0) * PERFECT_CLEAR_BONUS;
+    int result = max_score + (mino_count == 0) * PERFECT_CLEAR_BONUS;
+
+    add_uint64_int_dynamic_map(already_evaluated, encoded_game, result);
+    return result;
 }
 
 struct active_piece get_optimal_move(struct tetris_game game, int depth) {
+    struct uint64_int_dynamic_map * already_calculated = (struct uint64_int_dynamic_map *) malloc(sizeof(struct uint64_int_dynamic_map));
+    init_uint64_int_dynamic_map(already_calculated, 50);
+
     struct tetris_game test_game = {0};
 
     int * possible_placements = get_possible_placements(game.piece.type, game.board);
@@ -225,7 +273,7 @@ struct active_piece get_optimal_move(struct tetris_game game, int depth) {
         test_game.piece.r = possible_placements[i+2];
 
         try_place_piece(&test_game);
-        int evaluation = evaluate_game(test_game, depth);
+        int evaluation = evaluate_game(test_game, depth, already_calculated);
         if (evaluation > max_score) {
             max_score = evaluation;
             best_piece.x = possible_placements[i];
@@ -235,7 +283,7 @@ struct active_piece get_optimal_move(struct tetris_game game, int depth) {
         }
         swap_hold(&test_game);
 
-        int hold_evaluation = evaluate_game(test_game, depth);
+        int hold_evaluation = evaluate_game(test_game, depth, already_calculated);
         if (hold_evaluation > max_score) {
             max_score = hold_evaluation;
             best_piece.x = possible_placements[i];
@@ -256,7 +304,7 @@ struct active_piece get_optimal_move(struct tetris_game game, int depth) {
         test_game.piece.r = possible_placements[i+2];
 
         try_place_piece(&test_game);
-        int evaluation = evaluate_game(test_game, depth);
+        int evaluation = evaluate_game(test_game, depth, already_calculated);
         if (evaluation > max_score) {
             max_score = evaluation;
             best_piece.x = possible_placements[i];
@@ -266,7 +314,7 @@ struct active_piece get_optimal_move(struct tetris_game game, int depth) {
         }
         swap_hold(&test_game);
 
-        int hold_evaluation = evaluate_game(test_game, depth);
+        int hold_evaluation = evaluate_game(test_game, depth, already_calculated);
         if (hold_evaluation > max_score) {
             max_score = hold_evaluation;
             best_piece.x = possible_placements[i];
@@ -275,6 +323,8 @@ struct active_piece get_optimal_move(struct tetris_game game, int depth) {
             best_piece.type = game.piece.type;
         }
     }
+    del_uint64_int_dynamic_map(already_calculated);
+    free(already_calculated);
 
     return best_piece;
 }
