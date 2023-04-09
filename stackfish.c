@@ -44,6 +44,9 @@ int * get_possible_placements(int piece_type, int board[BOARD_H*BOARD_W]) {
             test_piece.y = y;
             test_piece.r = r;
 
+            // on first loop, check if piece can exist
+            if (loop_num == 1 && check_collision(test_piece, board)) continue;
+
             // after first loop, check if viable placement
             if (loop_num > 1 && can_place_piece(test_piece, board)) {
                 placements[placements_count*3    ] = x;
