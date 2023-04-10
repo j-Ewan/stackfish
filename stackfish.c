@@ -2,8 +2,11 @@
 
 // constants for board evaluation, mostly arbitrary for now
 #define PERFECT_CLEAR_BONUS 1000000
-const int BOARD_HEAT_MAP[BOARD_H*BOARD_W] =         {5, 5, 4, 4, 3, 3, 3, 3, 4, 5, 5, 5, 4, 3, 3, 2, 0, 1, 4, 5, 5, 4, 4, 2, 2, 1, 0, -1, 1, 4, 5, 4, 3, 3, 2, 1, -1, -1, 0, 4};
-const int BOARD_HEAT_MAP_REVERSE[BOARD_H*BOARD_W] = {5, 4, 3, 3, 3, 3, 4, 4, 5, 5, 5, 4, 1, 0, 2, 3, 3, 4, 5, 5, 4, 1, -1, 0, 1, 2, 2, 4, 4, 5, 4, 0, -1, -1, 1, 2, 3, 3, 4, 5};
+#define USE_T_PENALTY 3
+#define USE_LJ_PENALTY 1
+#define HOLE_PENALTY 50
+const int BOARD_HEAT_MAP[BOARD_H*BOARD_W] =         {12, 11, 10, 10, 7, 5, 2, 3, 5, 5, 11, 11, 9, 6, 3, 0, -1, 0, 3, 5, 11, 10, 7, 5, 2, 0, -2, -1, 0, 3, 10, 9, 7, 6, 0, -1, -2, -1, 0, 2};
+const int BOARD_HEAT_MAP_REVERSE[BOARD_H*BOARD_W] = {5, 5, 3, 2, 5, 7, 10, 10, 11, 12, 5, 3, 0, -1, 0, 3, 6, 9, 11, 11, 3, 0, -1, -2, 0, 2, 5, 7, 10, 11, 2, 0, -1, -2, -1, 0, 6, 7, 9, 10};
 
 // gets a list of all possible piece placements given a piece and board. return array in the form of 36 3-tuples, (x, y, r)
 int * get_possible_placements(int piece_type, int board[BOARD_H*BOARD_W]) {
@@ -103,6 +106,31 @@ int * get_possible_placements(int piece_type, int board[BOARD_H*BOARD_W]) {
     return placements;
 }
 
+void flood_fill(int board[BOARD_H*BOARD_W], int * checked, int start) {
+    if (checked[start]) return;
+    checked[start] = 1;
+    if (board[start] != 0) return;
+    if (start % BOARD_W > 0) flood_fill(board, checked, start-1);
+    if (start % BOARD_W < BOARD_W-1) flood_fill(board, checked, start+1);
+    if (start > BOARD_W) flood_fill(board, checked, start-BOARD_W);
+    if (start < BOARD_W*(BOARD_H-1)) flood_fill(board, checked, start+BOARD_W);
+}
+
+int count_holes(int board[BOARD_H*BOARD_W]) {
+    int * checked = (int*) malloc(sizeof(int)*BOARD_H*BOARD_W);
+    memset(checked, 0, sizeof(int)*BOARD_H*BOARD_W);
+    int holes = 0;
+    for (int i = 0; i < BOARD_H*BOARD_W; i++) {
+        if (checked[i]) continue;
+        if (board[i] == 0) {
+            holes++;
+            flood_fill(board, checked, i);
+        }
+    }
+    free(checked);
+    return holes;
+}
+
 int roughly_evaluate_board(int board[BOARD_H * BOARD_W]) {
     int score = 1000; // arbitrary base value
 
@@ -125,11 +153,16 @@ int roughly_evaluate_board(int board[BOARD_H * BOARD_W]) {
     for (int i = 0; i < BOARD_H*BOARD_W; i++) {
         map_score_left += (board[i] != 0) * BOARD_HEAT_MAP[i];
         map_score_right += (board[i] != 0) * BOARD_HEAT_MAP_REVERSE[i];
+
+        score -= (board[i] == T_PIECE) * USE_T_PENALTY;
+        score -= (board[i] == L_PIECE || board[i] == J_PIECE) * USE_LJ_PENALTY;
     }
     int use_left = map_score_left > map_score_right;
     score += use_left * map_score_left
           + !use_left * map_score_right;
     
+    int num_holes = count_holes(board);
+    score -= (num_holes-1) * HOLE_PENALTY;
 
     return score;
 }
@@ -258,6 +291,8 @@ int evaluate_game(struct tetris_game game, int depth, struct uint64_int_dynamic_
 }
 
 struct active_piece get_optimal_move(struct tetris_game game, int depth) {
+    // printf("called get_optimal_move with depth %d\n", depth);
+
     struct uint64_int_dynamic_map * already_calculated = (struct uint64_int_dynamic_map *) malloc(sizeof(struct uint64_int_dynamic_map));
     init_uint64_int_dynamic_map(already_calculated, 50);
 
@@ -266,7 +301,9 @@ struct active_piece get_optimal_move(struct tetris_game game, int depth) {
     int * possible_placements = get_possible_placements(game.piece.type, game.board);
 
     int max_score = 0;
+    int tie_breaker_score = 0;
     struct active_piece best_piece;
+    best_piece.type = -1;
 
     for (int i = 0; possible_placements[i] != -1 && i < 3*36; i+=3) {
         test_game = game;
@@ -277,8 +314,10 @@ struct active_piece get_optimal_move(struct tetris_game game, int depth) {
 
         try_place_piece(&test_game);
         int evaluation = evaluate_game(test_game, depth, already_calculated);
-        if (evaluation > max_score) {
+        int rough_evaluation = roughly_evaluate_board(test_game.board);
+        if (evaluation > max_score || (evaluation == max_score && tie_breaker_score < rough_evaluation)) {
             max_score = evaluation;
+            tie_breaker_score = rough_evaluation;
             best_piece.x = possible_placements[i];
             best_piece.y = possible_placements[i+1];
             best_piece.r = possible_placements[i+2];
@@ -286,9 +325,11 @@ struct active_piece get_optimal_move(struct tetris_game game, int depth) {
         }
         swap_hold(&test_game);
 
-        int hold_evaluation = evaluate_game(test_game, depth, already_calculated);
-        if (hold_evaluation > max_score) {
-            max_score = hold_evaluation;
+        evaluation = evaluate_game(test_game, depth, already_calculated);
+        rough_evaluation = roughly_evaluate_board(test_game.board);
+        if (evaluation > max_score || (evaluation == max_score && tie_breaker_score < rough_evaluation)) {
+            max_score = evaluation;
+            tie_breaker_score = rough_evaluation;
             best_piece.x = possible_placements[i];
             best_piece.y = possible_placements[i+1];
             best_piece.r = possible_placements[i+2];
@@ -297,6 +338,7 @@ struct active_piece get_optimal_move(struct tetris_game game, int depth) {
     }
 
     swap_hold(&game);
+    free(possible_placements);
     possible_placements = get_possible_placements(game.piece.type, game.board);
 
     for (int i = 0; possible_placements[i] != -1 && i < 3*36; i+=3) {
@@ -308,8 +350,10 @@ struct active_piece get_optimal_move(struct tetris_game game, int depth) {
 
         try_place_piece(&test_game);
         int evaluation = evaluate_game(test_game, depth, already_calculated);
-        if (evaluation > max_score) {
+        int rough_evaluation = roughly_evaluate_board(test_game.board);
+        if (evaluation > max_score || (evaluation == max_score && tie_breaker_score < rough_evaluation)) {
             max_score = evaluation;
+            tie_breaker_score = rough_evaluation;
             best_piece.x = possible_placements[i];
             best_piece.y = possible_placements[i+1];
             best_piece.r = possible_placements[i+2];
@@ -317,9 +361,11 @@ struct active_piece get_optimal_move(struct tetris_game game, int depth) {
         }
         swap_hold(&test_game);
 
-        int hold_evaluation = evaluate_game(test_game, depth, already_calculated);
-        if (hold_evaluation > max_score) {
-            max_score = hold_evaluation;
+        evaluation = evaluate_game(test_game, depth, already_calculated);
+        rough_evaluation = roughly_evaluate_board(test_game.board);
+        if (evaluation > max_score || (evaluation == max_score && tie_breaker_score < rough_evaluation)) {
+            max_score = evaluation;
+            tie_breaker_score = rough_evaluation;
             best_piece.x = possible_placements[i];
             best_piece.y = possible_placements[i+1];
             best_piece.r = possible_placements[i+2];
@@ -328,6 +374,9 @@ struct active_piece get_optimal_move(struct tetris_game game, int depth) {
     }
     del_uint64_int_dynamic_map(already_calculated);
     free(already_calculated);
+    free(possible_placements);
 
+    if (max_score >= PERFECT_CLEAR_BONUS) printf("found a pc\n");
+    // else printf("no pc found, use %d\n", depth+1);
     return best_piece;
 }
